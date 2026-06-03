@@ -11,7 +11,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
 from .const import DOMAIN
@@ -69,24 +69,18 @@ SENSORS: tuple[Trading212SensorEntityDescription, ...] = (
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
-    async_add_entities: AddConfigEntryEntitiesCallback,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Trading212 sensors from config entry."""
 
-    coordinators: list[Trading212Coordinator] = list(
-        hass.data[DOMAIN][config_entry.entry_id].values()
+    coordinator: Trading212Coordinator = hass.data[DOMAIN][config_entry.entry_id]
+
+    async_add_entities(
+        Trading212Sensor(coordinator, ticker, sensor)
+        for ticker in coordinator.positions
+        for sensor in SENSORS
+        if getattr(coordinator.positions[ticker], sensor.key, None) is not None
     )
-
-    sensors = []
-
-    for coordinator in coordinators:
-        sensors = [
-            Trading212Sensor(coordinator, sensor)
-            for sensor in SENSORS
-            if getattr(coordinator.position, sensor.key, False)
-        ]
-
-    async_add_entities(sensors)
 
 
 class Trading212Sensor(Trading212BaseEntity, SensorEntity):
@@ -95,12 +89,13 @@ class Trading212Sensor(Trading212BaseEntity, SensorEntity):
     def __init__(
         self,
         coordinator: Trading212Coordinator,
+        ticker: str,
         description: Trading212SensorEntityDescription,
     ) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, ticker)
         self.entity_description: Trading212SensorEntityDescription = description
-        self._attr_unique_id = f"{self.position.ticker}-{description.key}"
+        self._attr_unique_id = f"{ticker}-{description.key}"
 
     @property
     def native_value(self) -> StateType:

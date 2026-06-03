@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
 from pytrading212api.api import Trading212API
@@ -24,7 +23,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Traiding212 from a config entry."""
+    """Set up Trading212 from a config entry."""
     hass.data.setdefault(DOMAIN, {})
 
     trading212_api = Trading212API(
@@ -34,31 +33,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     try:
-        positions = await trading212_api.get_positions()
-
+        raw_positions = await trading212_api.get_positions()
     except Trading212BadApiKey as err:
         _LOGGER.error("API key invalid")
         raise ConfigEntryAuthFailed(f"API key invalid {entry.data[CONF_ID]}") from err
-
     except Trading212TimeOut as err:
         raise ConfigEntryNotReady(f"Error connecting to {entry.data[CONF_ID]}") from err
 
+    positions = [Position(trading212_api, p) for p in raw_positions]
     scan_interval = entry.options.get(CONF_SCAN_INTERVAL)
-    coordinators = {
-        position["ticker"]: Trading212Coordinator(
-            hass, Position(trading212_api, position), scan_interval, entry
-        )
-        for position in positions
-    }
 
-    await asyncio.gather(
-        *(
-            coordinator.async_config_entry_first_refresh()
-            for coordinator in list(coordinators.values())
-        )
+    coordinator = Trading212Coordinator(
+        hass, trading212_api, positions, scan_interval, entry
     )
 
-    hass.data[DOMAIN][entry.entry_id] = coordinators
+    # Single first_refresh — one bulk API call, not N concurrent ones.
+    await coordinator.async_config_entry_first_refresh()
+
+    hass.data[DOMAIN][entry.entry_id] = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

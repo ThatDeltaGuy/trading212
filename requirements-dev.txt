@@ -1,0 +1,5 @@
+# Test dependencies for the Trading212 custom integration.
+# pytest-homeassistant-custom-component pins a compatible homeassistant version
+# and provides the hass fixture and related test infrastructure.
+pytest-homeassistant-custom-component
+pytrading212api==2026.1.1
