@@ -2,10 +2,11 @@
   "domain": "trading212",
   "name": "Trading212",
   "codeowners": [
-    "@ryanbdclark"
+    "@ryanbdclark",
+    "@ThatDeltaGuy"
   ],
   "config_flow": true,
-  "documentation": "https://www.home-assistant.io/integrations/trading212",
+  "documentation": "https://github.com/ryanbdclark/trading212",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/ryanbdclark/trading212/issues",
   "requirements": [
