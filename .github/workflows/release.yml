@@ -55,11 +55,11 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: |
           manifest_version=$(python - <<'PY'
-import json
-from pathlib import Path
-manifest = json.loads(Path("custom_components/trading212/manifest.json").read_text())
-print(manifest["version"])
-PY
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path("custom_components/trading212/manifest.json").read_text())
+          print(manifest["version"])
+          PY
           )
 
           if [ "$manifest_version" != "$VERSION" ]; then
