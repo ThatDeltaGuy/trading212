@@ -1,0 +1,127 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release, without the leading v
+        required: true
+        type: string
+      prerelease:
+        description: Mark the GitHub Release as a prerelease
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'branch'
+
+    steps:
+      - name: Validate release branch
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "main" ]; then
+            echo "This workflow must be run from the main branch." >&2
+            echo "Current ref: ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Validate manifest version and tag availability
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          manifest_version=$(python - <<'PY'
+import json
+from pathlib import Path
+manifest = json.loads(Path("custom_components/trading212/manifest.json").read_text())
+print(manifest["version"])
+PY
+          )
+
+          if [ "$manifest_version" != "$VERSION" ]; then
+            echo "Manifest version $manifest_version does not match requested version $VERSION" >&2
+            exit 1
+          fi
+
+          tag_name="v$VERSION"
+          if git rev-parse "$tag_name" >/dev/null 2>&1; then
+            echo "Tag $tag_name already exists" >&2
+            exit 1
+          fi
+
+      - name: Run test suite
+        run: python -m pytest tests/ -v --tb=short
+
+      - name: Build HACS release archive
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          asset_name="trading212.zip"
+          staging_dir="/tmp/trading212-release"
+          rm -rf "$staging_dir"
+          mkdir -p "$staging_dir"
+
+          cp -R custom_components "$staging_dir/"
+          cp README.md LICENSE hacs.json "$staging_dir/"
+          if [ -d brand ]; then
+            cp -R brand "$staging_dir/"
+          fi
+
+          mkdir -p dist
+          rm -f "dist/$asset_name"
+          (
+            cd "$staging_dir" && zip -rq "/tmp/$asset_name" .
+          )
+          mv "/tmp/$asset_name" "dist/$asset_name"
+
+      - name: Create and push tag
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          tag_name="v$VERSION"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag_name" -m "Release $tag_name"
+          git push origin "$tag_name"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          tag_name="v$VERSION"
+          prerelease_flag=""
+          if [ "$PRERELEASE" = "true" ]; then
+            prerelease_flag="--prerelease"
+          fi
+
+          gh release create "$tag_name" \
+            dist/trading212.zip \
+            --title "$tag_name" \
+            --generate-notes \
+            $prerelease_flag
