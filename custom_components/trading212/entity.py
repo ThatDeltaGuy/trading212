@@ -16,15 +16,18 @@ class Trading212BaseEntity(CoordinatorEntity[Trading212Coordinator], Entity):
     def __init__(
         self,
         coordinator: Trading212Coordinator,
+        ticker: str,
     ) -> None:
         """Initialize the base entity."""
         super().__init__(coordinator)
-        self.position = coordinator.position
+        self._ticker = ticker
+        # Position object is still available for attribute access (ticker, etc.)
+        self.position = coordinator.positions[ticker]
 
     @property
     def device_info(self) -> DeviceInfo:
         """Return the device info of the device."""
         return DeviceInfo(
-            identifiers={(DOMAIN, self.position.ticker)},
-            name=f"{self.position.ticker} position",
+            identifiers={(DOMAIN, self._ticker)},
+            name=f"{self._ticker} position",
         )

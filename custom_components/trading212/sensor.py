@@ -73,20 +73,14 @@ async def async_setup_entry(
 ) -> None:
     """Set up the Trading212 sensors from config entry."""
 
-    coordinators: list[Trading212Coordinator] = list(
-        hass.data[DOMAIN][config_entry.entry_id].values()
+    coordinator: Trading212Coordinator = hass.data[DOMAIN][config_entry.entry_id]
+
+    async_add_entities(
+        Trading212Sensor(coordinator, ticker, sensor)
+        for ticker in coordinator.positions
+        for sensor in SENSORS
+        if getattr(coordinator.positions[ticker], sensor.key, None) is not None
     )
-
-    sensors = []
-
-    for coordinator in coordinators:
-        sensors = [
-            Trading212Sensor(coordinator, sensor)
-            for sensor in SENSORS
-            if getattr(coordinator.position, sensor.key, False)
-        ]
-
-    async_add_entities(sensors)
 
 
 class Trading212Sensor(Trading212BaseEntity, SensorEntity):
@@ -95,12 +89,13 @@ class Trading212Sensor(Trading212BaseEntity, SensorEntity):
     def __init__(
         self,
         coordinator: Trading212Coordinator,
+        ticker: str,
         description: Trading212SensorEntityDescription,
     ) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, ticker)
         self.entity_description: Trading212SensorEntityDescription = description
-        self._attr_unique_id = f"{self.position.ticker}-{description.key}"
+        self._attr_unique_id = f"{ticker}-{description.key}"
 
     @property
     def native_value(self) -> StateType:
