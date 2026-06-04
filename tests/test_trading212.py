@@ -34,6 +34,16 @@ RAW_POSITION_1: dict[str, Any] = {
     "maxBuy": 100.0,
     "maxSell": 10.0,
     "pieQuantity": 0,
+    # New API fields
+    "quantityAvailableForTrading": 10.0,
+    "quantityInPies": 0,
+    "walletImpact": {
+        "currency": "GBP",
+        "currentValue": 1421.50,
+        "fxImpact": -78.50,
+        "totalCost": 1210.00,
+        "unrealizedProfitLoss": 211.50,
+    },
 }
 
 RAW_POSITION_2: dict[str, Any] = {
@@ -523,7 +533,7 @@ class TestSensorNativeValue:
         assert self._make_sensor("current_value").native_value == pytest.approx(1750.00)
 
     def test_buy_value(self):
-        assert self._make_sensor("buy_value").native_value == pytest.approx(1500.00)
+        assert self._make_sensor("buy_value").native_value == pytest.approx(1210.00)
 
     def test_percent_change(self):
         assert self._make_sensor("percent_change").native_value == pytest.approx(
@@ -545,15 +555,17 @@ class TestSensorNativeValue:
 
 class TestSensorSetup:
     def test_sensor_count(self):
-        """Seven sensor types: removed standalone quantity, added max_sell and initial_fill_date."""
+        """Nine sensor types defined."""
         from custom_components.trading212.sensor import SENSORS
-        assert len(SENSORS) == 7
+        assert len(SENSORS) == 9
 
     def test_sensor_keys_match_position_attributes(self):
-        """Every sensor key must resolve on a real Position object."""
+        """Sensors without raw_path must resolve on a real Position object."""
         from custom_components.trading212.sensor import SENSORS
         pos = make_position(make_mock_api(), RAW_POSITION_1)
         for desc in SENSORS:
+            if desc.raw_path is not None:
+                continue  # value comes from raw coordinator data, not Position
             assert getattr(pos, desc.key, None) is not None, (
                 f"Sensor key '{desc.key}' not found on Position"
             )
@@ -569,7 +581,7 @@ class TestSensorSetup:
 
     def test_quantity_available_for_trading_sensor_exists(self):
         from custom_components.trading212.sensor import SENSORS
-        assert any(s.key == "max_sell" for s in SENSORS)
+        assert any(s.key == "quantity_available_for_trading" for s in SENSORS)
 
     def test_initial_fill_date_sensor_exists(self):
         from custom_components.trading212.sensor import SENSORS
@@ -633,20 +645,27 @@ class TestSensorAttributes:
         assert attrs["wallet_impact_unrealized_profit_loss"] == pytest.approx(250.0)
 
     def test_wallet_value_omits_wallet_impact_when_absent(self):
-        sensor = self._make_sensor("current_value")
+        sensor = self._make_sensor("current_value", raw_data_override={"walletImpact": None})
         attrs = sensor.extra_state_attributes
         assert "wallet_impact_currency" not in attrs
         assert "wallet_impact_fx_impact" not in attrs
 
     def test_monetary_sensors_have_instrument_currency(self):
-        for key in ("average_price", "current_price", "buy_value"):
+        for key in ("average_price", "current_price"):
             sensor = self._make_sensor(key)
             assert sensor.extra_state_attributes.get("instrument_currency") == "USD", (
                 f"Expected instrument_currency on {key}"
             )
 
+    def test_wallet_impact_sensors_have_no_instrument_currency(self):
+        for key in ("buy_value", "unrealized_profit_loss", "fx_impact"):
+            sensor = self._make_sensor(key)
+            assert "instrument_currency" not in sensor.extra_state_attributes, (
+                f"Did not expect instrument_currency on {key}"
+            )
+
     def test_non_monetary_sensors_have_no_instrument_currency(self):
-        for key in ("percent_change", "max_sell"):
+        for key in ("percent_change", "quantity_available_for_trading"):
             sensor = self._make_sensor(key)
             assert "instrument_currency" not in sensor.extra_state_attributes, (
                 f"Did not expect instrument_currency on {key}"

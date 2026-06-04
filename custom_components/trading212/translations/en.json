@@ -39,20 +39,23 @@
   },
   "entity": {
     "sensor": {
-      "averageprice": {
-        "name": "Average price"
+      "averagepricepaid": {
+        "name": "Average price paid"
       },
       "currentprice": {
         "name": "Current price"
       },
-      "quantity": {
-        "name": "Quantity"
-      },
       "walletvalue": {
         "name": "Wallet value"
       },
-      "invested": {
-        "name": "Invested"
+      "amountinvested": {
+        "name": "Amount invested"
+      },
+      "unrealizedprofitloss": {
+        "name": "Unrealized profit / loss"
+      },
+      "fximpact": {
+        "name": "FX impact"
       },
       "percentchange": {
         "name": "Percent change"
@@ -80,9 +83,6 @@
       },
       "totalinvested": {
         "name": "Total invested"
-      },
-      "unrealizedprofitloss": {
-        "name": "Unrealized profit / loss"
       }
     }
   }
