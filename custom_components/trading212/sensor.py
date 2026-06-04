@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from homeassistant.components.sensor import (
+    SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
     SensorStateClass,
@@ -38,11 +40,6 @@ SENSORS: tuple[Trading212SensorEntityDescription, ...] = (
         suggested_display_precision=2,
     ),
     Trading212SensorEntityDescription(
-        key="quantity",
-        translation_key="quantity",
-        state_class=SensorStateClass.MEASUREMENT,
-    ),
-    Trading212SensorEntityDescription(
         key="current_value",
         translation_key="walletvalue",
         state_class=SensorStateClass.MEASUREMENT,
@@ -59,7 +56,21 @@ SENSORS: tuple[Trading212SensorEntityDescription, ...] = (
         translation_key="percentchange",
         state_class=SensorStateClass.MEASUREMENT,
     ),
+    Trading212SensorEntityDescription(
+        key="max_sell",
+        translation_key="quantityavailablefortrading",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    Trading212SensorEntityDescription(
+        key="initial_fill_date",
+        translation_key="initialfilldate",
+        device_class=SensorDeviceClass.TIMESTAMP,
+    ),
 )
+
+# Keys for sensors that represent monetary values and should carry
+# the instrument's trading currency as an attribute.
+_MONETARY_KEYS = frozenset({"average_price", "current_price", "current_value", "buy_value"})
 
 
 async def async_setup_entry(
@@ -80,7 +91,7 @@ async def async_setup_entry(
 
 
 class Trading212Sensor(Trading212BaseEntity, SensorEntity):
-    """Representation of an Trading212 sensor."""
+    """Representation of a Trading212 sensor."""
 
     def __init__(
         self,
@@ -95,15 +106,40 @@ class Trading212Sensor(Trading212BaseEntity, SensorEntity):
 
     @property
     def native_unit_of_measurement(self) -> str | None:
-        """Return the unit of measurement from the instrument's trading currency."""
-        if self.entity_description.key in (
-            "average_price", "current_price", "current_value", "buy_value"
-        ):
+        """Return the instrument's trading currency for monetary sensors."""
+        if self.entity_description.key in _MONETARY_KEYS:
             return self._currency or None
         return None
 
     @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes depending on sensor type."""
+        attrs: dict[str, Any] = {}
+        key = self.entity_description.key
+
+        # Instrument currency on all monetary sensors.
+        if key in _MONETARY_KEYS and self._currency:
+            attrs["instrument_currency"] = self._currency
+
+        # Wallet value carries quantity and walletImpact fields.
+        if key == "current_value":
+            attrs["quantity"] = self.position.quantity
+            attrs["quantity_in_pies"] = self.position.pie_quantity
+
+            raw = self.coordinator.data.get(self._ticker, {})
+            wallet_impact = raw.get("walletImpact") or {}
+            for src_key, attr_key in (
+                ("currency", "wallet_impact_currency"),
+                ("fxImpact", "wallet_impact_fx_impact"),
+                ("totalCost", "wallet_impact_total_cost"),
+                ("unrealizedProfitLoss", "wallet_impact_unrealized_profit_loss"),
+            ):
+                if src_key in wallet_impact:
+                    attrs[attr_key] = wallet_impact[src_key]
+
+        return attrs
+
+    @property
     def native_value(self) -> StateType:
         """Return sensor value."""
-
         return getattr(self.position, self.entity_description.key, None)

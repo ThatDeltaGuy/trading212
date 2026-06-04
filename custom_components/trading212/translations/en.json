@@ -56,6 +56,12 @@
       },
       "percentchange": {
         "name": "Percent change"
+      },
+      "quantityavailablefortrading": {
+        "name": "Quantity available for trading"
+      },
+      "initialfilldate": {
+        "name": "Position opened"
       }
     }
   }
