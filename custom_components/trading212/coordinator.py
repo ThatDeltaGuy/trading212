@@ -60,8 +60,10 @@ class Trading212Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.api = api
         # Keyed by ticker for O(1) lookup in entities.
         self.positions: dict[str, Position] = {p.ticker: p for p in positions}
-        # Maps ticker → (full_name, short_name) e.g. ("Nvidia Corp", "NVDA").
+        # Maps ticker → (full_name, short_name, isin, type, currency).
         self.instrument_names = instrument_names
+        # Account-level summary data, populated each poll cycle.
+        self.account_data: dict[str, Any] = {}
         self.config_entry: ConfigEntry = entry
         self._base_interval = max(timedelta(seconds=interval), _MIN_INTERVAL)
 
@@ -106,5 +108,14 @@ class Trading212Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.debug("New position detected: %s", ticker)
                 self.positions[ticker] = Position(self.api, raw)
             data[ticker] = raw
+
+        # Fetch account summary best-effort — a failure here keeps existing
+        # account_data and does not affect position sensor availability.
+        try:
+            self.account_data = await self.api.get_account_metadata()
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning(
+                "Could not fetch account summary; account wallet sensors may show stale data"
+            )
 
         return data

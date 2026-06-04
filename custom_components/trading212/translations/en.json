@@ -62,6 +62,30 @@
       },
       "initialfilldate": {
         "name": "Position opened"
+      },
+      "availablefortrade": {
+        "name": "Available to trade"
+      },
+      "cashinpies": {
+        "name": "Cash in pies"
+      },
+      "reservedfororders": {
+        "name": "Reserved for orders"
+      },
+      "investmentscurrentvalue": {
+        "name": "Investments current value"
+      },
+      "realizedprofitloss": {
+        "name": "Realized profit / loss"
+      },
+      "totalcost": {
+        "name": "Total cost"
+      },
+      "unrealizedprofitloss": {
+        "name": "Unrealized profit / loss"
+      },
+      "totalvalue": {
+        "name": "Total value"
       }
     }
   }

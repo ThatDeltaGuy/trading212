@@ -655,3 +655,116 @@ class TestSensorAttributes:
     def test_non_wallet_sensor_has_no_quantity_attribute(self):
         sensor = self._make_sensor("current_price")
         assert "quantity" not in sensor.extra_state_attributes
+
+
+# ---------------------------------------------------------------------------
+# Account Wallet sensors
+# ---------------------------------------------------------------------------
+
+RAW_ACCOUNT_SUMMARY: dict[str, Any] = {
+    "id": 12345678,
+    "currency": "GBP",
+    "cash": {
+        "availableToTrade": 500.00,
+        "inPies": 100.00,
+        "reservedForOrders": 50.00,
+    },
+    "investments": {
+        "currentValue": 10000.00,
+        "realizedProfitLoss": 250.00,
+        "totalCost": 9500.00,
+        "unrealizedProfitLoss": 500.00,
+    },
+    "totalValue": 10500.00,
+}
+
+
+class TestAccountWalletSensor:
+    def _make_sensor(self, key: str, account_data: dict | None = None):
+        from custom_components.trading212.account_sensor import (
+            AccountWalletSensor,
+            ACCOUNT_WALLET_SENSORS,
+        )
+        coord = make_coordinator()
+        coord.account_data = account_data if account_data is not None else RAW_ACCOUNT_SUMMARY
+        coord._listeners = {}
+        coord.last_update_success = True
+
+        description = next(s for s in ACCOUNT_WALLET_SENSORS if s.key == key)
+
+        with patch(
+            "custom_components.trading212.account_sensor.CoordinatorEntity.__init__",
+            return_value=None,
+        ):
+            sensor = AccountWalletSensor.__new__(AccountWalletSensor)
+            sensor.coordinator = coord
+            sensor._account_id = "12345678"
+            sensor._currency = "GBP"
+            sensor.entity_description = description
+            sensor._attr_unique_id = f"12345678_wallet_{key}"
+            from homeassistant.helpers.device_registry import DeviceInfo
+            sensor._attr_device_info = DeviceInfo(
+                identifiers={("trading212", "12345678_wallet")},
+                name="Account Wallet",
+            )
+
+        return sensor
+
+    def test_sensor_count(self):
+        from custom_components.trading212.account_sensor import ACCOUNT_WALLET_SENSORS
+        assert len(ACCOUNT_WALLET_SENSORS) == 8
+
+    def test_all_keys_unique(self):
+        from custom_components.trading212.account_sensor import ACCOUNT_WALLET_SENSORS
+        keys = [s.key for s in ACCOUNT_WALLET_SENSORS]
+        assert len(keys) == len(set(keys))
+
+    def test_available_to_trade(self):
+        assert self._make_sensor("available_to_trade").native_value == pytest.approx(500.00)
+
+    def test_cash_in_pies(self):
+        assert self._make_sensor("cash_in_pies").native_value == pytest.approx(100.00)
+
+    def test_reserved_for_orders(self):
+        assert self._make_sensor("reserved_for_orders").native_value == pytest.approx(50.00)
+
+    def test_investments_current_value(self):
+        assert self._make_sensor("investments_current_value").native_value == pytest.approx(10000.00)
+
+    def test_realized_profit_loss(self):
+        assert self._make_sensor("realized_profit_loss").native_value == pytest.approx(250.00)
+
+    def test_total_cost(self):
+        assert self._make_sensor("total_cost").native_value == pytest.approx(9500.00)
+
+    def test_unrealized_profit_loss(self):
+        assert self._make_sensor("unrealized_profit_loss").native_value == pytest.approx(500.00)
+
+    def test_total_value(self):
+        assert self._make_sensor("total_value").native_value == pytest.approx(10500.00)
+
+    def test_native_unit_is_account_currency(self):
+        assert self._make_sensor("total_value").native_unit_of_measurement == "GBP"
+
+    def test_currency_attribute(self):
+        assert self._make_sensor("available_to_trade").extra_state_attributes["currency"] == "GBP"
+
+    def test_returns_none_for_missing_path(self):
+        sensor = self._make_sensor("available_to_trade", account_data={})
+        assert sensor.native_value is None
+
+    def test_returns_none_for_missing_nested_key(self):
+        sensor = self._make_sensor("cash_in_pies", account_data={"cash": {}})
+        assert sensor.native_value is None
+
+    def test_unique_id_format(self):
+        sensor = self._make_sensor("total_value")
+        assert sensor._attr_unique_id == "12345678_wallet_total_value"
+
+    def test_device_info_identifier(self):
+        sensor = self._make_sensor("total_value")
+        assert ("trading212", "12345678_wallet") in sensor._attr_device_info["identifiers"]
+
+    def test_device_name_is_account_wallet(self):
+        sensor = self._make_sensor("total_value")
+        assert sensor._attr_device_info["name"] == "Account Wallet"

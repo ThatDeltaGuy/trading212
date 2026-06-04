@@ -16,6 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
+from .account_sensor import ACCOUNT_WALLET_SENSORS, AccountWalletSensor
 from .const import DOMAIN
 from .coordinator import Trading212Coordinator
 from .entity import Trading212BaseEntity
@@ -81,13 +82,22 @@ async def async_setup_entry(
     """Set up the Trading212 sensors from config entry."""
 
     coordinator: Trading212Coordinator = hass.data[DOMAIN][config_entry.entry_id]
+    account_id: str = config_entry.unique_id or ""
+    currency: str = coordinator.account_data.get("currency", "")
 
-    async_add_entities(
+    entities: list = [
         Trading212Sensor(coordinator, ticker, sensor)
         for ticker in coordinator.positions
         for sensor in SENSORS
         if getattr(coordinator.positions[ticker], sensor.key, None) is not None
-    )
+    ]
+
+    entities += [
+        AccountWalletSensor(coordinator, account_id, currency, sensor)
+        for sensor in ACCOUNT_WALLET_SENSORS
+    ]
+
+    async_add_entities(entities)
 
 
 class Trading212Sensor(Trading212BaseEntity, SensorEntity):
