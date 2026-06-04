@@ -28,14 +28,12 @@ SENSORS: tuple[Trading212SensorEntityDescription, ...] = (
     Trading212SensorEntityDescription(
         key="average_price",
         translation_key="averageprice",
-        native_unit_of_measurement="GBP",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
     ),
     Trading212SensorEntityDescription(
         key="current_price",
         translation_key="currentprice",
-        native_unit_of_measurement="GBP",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
     ),
@@ -46,15 +44,13 @@ SENSORS: tuple[Trading212SensorEntityDescription, ...] = (
     ),
     Trading212SensorEntityDescription(
         key="current_value",
-        translation_key="currentvalue",
-        native_unit_of_measurement="GBP",
+        translation_key="walletvalue",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
     ),
     Trading212SensorEntityDescription(
         key="buy_value",
-        translation_key="buyvalue",
-        native_unit_of_measurement="GBP",
+        translation_key="invested",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
     ),
@@ -96,6 +92,15 @@ class Trading212Sensor(Trading212BaseEntity, SensorEntity):
         super().__init__(coordinator, ticker)
         self.entity_description: Trading212SensorEntityDescription = description
         self._attr_unique_id = f"{ticker}-{description.key}"
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        """Return the unit of measurement from the instrument's trading currency."""
+        if self.entity_description.key in (
+            "average_price", "current_price", "current_value", "buy_value"
+        ):
+            return self._currency or None
+        return None
 
     @property
     def native_value(self) -> StateType:

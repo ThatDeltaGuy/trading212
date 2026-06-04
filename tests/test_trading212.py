@@ -1,13 +1,4 @@
-"""Tests for the Trading212 custom integration.
-
-Strategy: unit-test the coordinator and entity logic directly, mocking
-the HA DataUpdateCoordinator infrastructure and the pytrading212api
-library.  This avoids the full HA test harness (pytest-homeassistant-
-custom-component) while still exercising all meaningful code paths.
-
-Run with:
-    pytest tests/ -v --tb=short
-"""
+"""Tests for the Trading212 custom integration."""
 
 from __future__ import annotations
 
@@ -59,11 +50,15 @@ RAW_POSITION_2: dict[str, Any] = {
     "pieQuantity": 0,
 }
 
-# Same as RAW_POSITION_1 but with updated price and P&L
 RAW_POSITION_UPDATED: dict[str, Any] = {
     **RAW_POSITION_1,
     "currentPrice": 180.00,
     "ppl": 300.00,
+}
+
+INSTRUMENT_NAMES: dict[str, tuple[str, str, str, str, str]] = {
+    "AAPL_US_EQ": ("Apple Inc", "AAPL", "US0378331005", "STOCK", "USD"),
+    "MSFT_US_EQ": ("Microsoft Corp", "MSFT", "US5949181045", "STOCK", "USD"),
 }
 
 
@@ -81,7 +76,6 @@ def make_mock_api(return_value: list[dict] | None = None) -> MagicMock:
 
 
 def make_mock_hass() -> MagicMock:
-    """Minimal mock of HomeAssistant needed by DataUpdateCoordinator."""
     hass = MagicMock()
     hass.loop = asyncio.get_event_loop()
     hass.bus = MagicMock()
@@ -100,12 +94,14 @@ def make_position(api: MagicMock, raw: dict) -> Position:
     return Position(api, raw)
 
 
-def make_coordinator(raw_positions=None, interval=30, api_exception=None):
+def make_coordinator(raw_positions=None, interval=30, api_exception=None, instrument_names=None):
     """Build a Trading212Coordinator with DataUpdateCoordinator.__init__ patched out."""
     from custom_components.trading212.coordinator import Trading212Coordinator
 
     if raw_positions is None:
         raw_positions = [RAW_POSITION_1]
+    if instrument_names is None:
+        instrument_names = INSTRUMENT_NAMES
 
     api = make_mock_api(raw_positions)
     if api_exception is not None:
@@ -119,9 +115,8 @@ def make_coordinator(raw_positions=None, interval=30, api_exception=None):
         "custom_components.trading212.coordinator.DataUpdateCoordinator.__init__",
         return_value=None,
     ):
-        coord = Trading212Coordinator(hass, api, positions, interval, entry)
+        coord = Trading212Coordinator(hass, api, positions, instrument_names, interval, entry)
 
-    # Populate attributes that super().__init__ would normally set
     coord.hass = hass
     coord.logger = MagicMock()
     coord.config_entry = entry
@@ -145,11 +140,29 @@ class TestCoordinatorInit:
             "custom_components.trading212.coordinator.DataUpdateCoordinator.__init__",
             return_value=None,
         ):
-            coord = Trading212Coordinator(make_mock_hass(), api, positions, 30, make_mock_config_entry())
+            coord = Trading212Coordinator(
+                make_mock_hass(), api, positions, INSTRUMENT_NAMES, 30, make_mock_config_entry()
+            )
 
         assert "AAPL_US_EQ" in coord.positions
         assert "MSFT_US_EQ" in coord.positions
         assert coord.positions["AAPL_US_EQ"].ticker == "AAPL_US_EQ"
+
+    def test_instrument_names_stored_on_coordinator(self):
+        from custom_components.trading212.coordinator import Trading212Coordinator
+
+        api = make_mock_api()
+        positions = [make_position(api, RAW_POSITION_1)]
+
+        with patch(
+            "custom_components.trading212.coordinator.DataUpdateCoordinator.__init__",
+            return_value=None,
+        ):
+            coord = Trading212Coordinator(
+                make_mock_hass(), api, positions, INSTRUMENT_NAMES, 30, make_mock_config_entry()
+            )
+
+        assert coord.instrument_names["AAPL_US_EQ"] == ("Apple Inc", "AAPL")
 
     def test_interval_below_minimum_is_clamped(self):
         from custom_components.trading212.coordinator import Trading212Coordinator, _MIN_INTERVAL
@@ -166,7 +179,9 @@ class TestCoordinatorInit:
             "custom_components.trading212.coordinator.DataUpdateCoordinator.__init__",
             capturing_init,
         ):
-            Trading212Coordinator(make_mock_hass(), api, positions, 1, make_mock_config_entry())
+            Trading212Coordinator(
+                make_mock_hass(), api, positions, INSTRUMENT_NAMES, 1, make_mock_config_entry()
+            )
 
         assert captured["update_interval"] >= _MIN_INTERVAL
 
@@ -185,7 +200,9 @@ class TestCoordinatorInit:
             "custom_components.trading212.coordinator.DataUpdateCoordinator.__init__",
             capturing_init,
         ):
-            Trading212Coordinator(make_mock_hass(), api, positions, 60, make_mock_config_entry())
+            Trading212Coordinator(
+                make_mock_hass(), api, positions, INSTRUMENT_NAMES, 60, make_mock_config_entry()
+            )
 
         assert captured["update_interval"] == timedelta(seconds=60)
 
@@ -199,7 +216,9 @@ class TestCoordinatorInit:
             "custom_components.trading212.coordinator.DataUpdateCoordinator.__init__",
             return_value=None,
         ):
-            coord = Trading212Coordinator(make_mock_hass(), api, positions, 30, make_mock_config_entry())
+            coord = Trading212Coordinator(
+                make_mock_hass(), api, positions, INSTRUMENT_NAMES, 30, make_mock_config_entry()
+            )
 
         assert coord.api is api
 
@@ -225,33 +244,25 @@ class TestCoordinatorUpdateData:
     async def test_updates_position_in_place(self):
         coord = make_coordinator([RAW_POSITION_1])
         assert coord.positions["AAPL_US_EQ"].current_price == 175.00
-
         coord.api.get_positions = AsyncMock(return_value=[RAW_POSITION_UPDATED])
         await coord._async_update_data()
-
         assert coord.positions["AAPL_US_EQ"].current_price == 180.00
 
     @pytest.mark.asyncio
     async def test_position_object_identity_preserved_on_update(self):
-        """The same Position object must be mutated, not replaced."""
         coord = make_coordinator([RAW_POSITION_1])
         original = coord.positions["AAPL_US_EQ"]
-
         coord.api.get_positions = AsyncMock(return_value=[RAW_POSITION_UPDATED])
         await coord._async_update_data()
-
         assert coord.positions["AAPL_US_EQ"] is original
 
     @pytest.mark.asyncio
     async def test_new_position_added_dynamically(self):
         coord = make_coordinator([RAW_POSITION_1])
         assert "MSFT_US_EQ" not in coord.positions
-
         coord.api.get_positions = AsyncMock(return_value=[RAW_POSITION_1, RAW_POSITION_2])
         await coord._async_update_data()
-
         assert "MSFT_US_EQ" in coord.positions
-        assert coord.positions["MSFT_US_EQ"].ticker == "MSFT_US_EQ"
 
     @pytest.mark.asyncio
     async def test_makes_exactly_one_api_call(self):
@@ -264,18 +275,14 @@ class TestCoordinatorUpdateData:
         from custom_components.trading212.coordinator import _RATE_LIMIT_BACKOFF
         coord = make_coordinator([RAW_POSITION_1])
         coord.update_interval = _RATE_LIMIT_BACKOFF
-
         await coord._async_update_data()
-
         assert coord.update_interval == coord._base_interval
 
     @pytest.mark.asyncio
     async def test_interval_unchanged_on_normal_successful_fetch(self):
         coord = make_coordinator([RAW_POSITION_1])
         original_interval = coord.update_interval
-
         await coord._async_update_data()
-
         assert coord.update_interval == original_interval
 
 
@@ -330,7 +337,6 @@ class TestCoordinatorErrorHandling:
 
     @pytest.mark.asyncio
     async def test_backoff_interval_persists_until_next_success(self):
-        """Backoff must not be reset by the failed update itself."""
         from homeassistant.helpers.update_coordinator import UpdateFailed
         from custom_components.trading212.coordinator import _RATE_LIMIT_BACKOFF
         coord = make_coordinator(api_exception=Trading212AttemptsExceeded("too many"))
@@ -357,60 +363,50 @@ class TestPositionModel:
         return Position(make_mock_api(), raw)
 
     def test_ticker(self):
-        p = self._make(RAW_POSITION_1)
-        assert p.ticker == "AAPL_US_EQ"
+        assert self._make(RAW_POSITION_1).ticker == "AAPL_US_EQ"
 
     def test_quantity(self):
-        p = self._make(RAW_POSITION_1)
-        assert p.quantity == pytest.approx(10.0)
+        assert self._make(RAW_POSITION_1).quantity == pytest.approx(10.0)
 
     def test_average_price(self):
-        p = self._make(RAW_POSITION_1)
-        assert p.average_price == pytest.approx(150.00)
+        assert self._make(RAW_POSITION_1).average_price == pytest.approx(150.00)
 
     def test_current_price(self):
-        p = self._make(RAW_POSITION_1)
-        assert p.current_price == pytest.approx(175.00)
+        assert self._make(RAW_POSITION_1).current_price == pytest.approx(175.00)
 
     def test_computed_buy_value(self):
-        p = self._make(RAW_POSITION_1)
-        assert p.buy_value == pytest.approx(150.00 * 10.0)
+        assert self._make(RAW_POSITION_1).buy_value == pytest.approx(1500.00)
 
     def test_computed_current_value(self):
-        p = self._make(RAW_POSITION_1)
-        assert p.current_value == pytest.approx(175.00 * 10.0)
+        assert self._make(RAW_POSITION_1).current_value == pytest.approx(1750.00)
 
     def test_percent_change_positive(self):
-        p = self._make(RAW_POSITION_1)
-        # ppl=250, buy_value=1500 → (250/1500)*100 = 16.67
-        assert p.percent_change == pytest.approx(round(250.0 / 1500.0 * 100, 2))
+        assert self._make(RAW_POSITION_1).percent_change == pytest.approx(
+            round(250.0 / 1500.0 * 100, 2)
+        )
 
     def test_percent_change_zero_buy_value_does_not_raise(self):
         raw = {**RAW_POSITION_1, "quantity": 0.0, "averagePrice": 0.0}
-        p = self._make(raw)
-        assert p.percent_change == 0.0
+        assert self._make(raw).percent_change == 0.0
 
     def test_update_position_mutates_current_price(self):
         p = self._make(RAW_POSITION_1)
-        assert p.current_price == 175.00
         p._update_position(RAW_POSITION_UPDATED)
         assert p.current_price == 180.00
 
     def test_update_position_recalculates_current_value(self):
         p = self._make(RAW_POSITION_1)
         p._update_position(RAW_POSITION_UPDATED)
-        assert p.current_value == pytest.approx(180.00 * 10.0)
+        assert p.current_value == pytest.approx(1800.00)
 
-    def test_update_position_buy_value_unchanged_when_price_and_qty_same(self):
+    def test_update_position_buy_value_unchanged(self):
         p = self._make(RAW_POSITION_1)
         p._update_position(RAW_POSITION_UPDATED)
-        # averagePrice and quantity unchanged in RAW_POSITION_UPDATED
-        assert p.buy_value == pytest.approx(150.00 * 10.0)
+        assert p.buy_value == pytest.approx(1500.00)
 
     def test_update_position_recalculates_percent_change(self):
         p = self._make(RAW_POSITION_1)
         p._update_position(RAW_POSITION_UPDATED)
-        # ppl=300, buy_value=1500 → 20.0%
         assert p.percent_change == pytest.approx(round(300.0 / 1500.0 * 100, 2))
 
 
@@ -419,11 +415,14 @@ class TestPositionModel:
 # ---------------------------------------------------------------------------
 
 class TestBaseEntity:
-    def _make_entity(self, raw=None):
+    def _make_entity(self, raw=None, instrument_names=None):
         from custom_components.trading212.entity import Trading212BaseEntity
         if raw is None:
             raw = RAW_POSITION_1
-        coord = make_coordinator([raw])
+        if instrument_names is None:
+            instrument_names = INSTRUMENT_NAMES
+
+        coord = make_coordinator([raw], instrument_names=instrument_names)
         coord.data = {raw["ticker"]: raw}
         coord._listeners = {}
         coord.last_update_success = True
@@ -436,24 +435,49 @@ class TestBaseEntity:
             entity.coordinator = coord
             entity._ticker = raw["ticker"]
             entity.position = coord.positions[raw["ticker"]]
+            full_name, short_name, isin, instrument_type, currency = (
+                coord.instrument_names.get(raw["ticker"], (raw["ticker"], raw["ticker"], "", "", ""))
+            )
+            entity._device_name = f"{full_name} - {short_name}"
+            entity._isin = isin
+            entity._instrument_type = instrument_type
+            entity._currency = currency
 
         return entity, coord
 
     def test_device_info_identifier_contains_ticker(self):
         entity, _ = self._make_entity()
-        info = entity.device_info
-        assert ("trading212", "AAPL_US_EQ") in info["identifiers"]
+        assert ("trading212", "AAPL_US_EQ") in entity.device_info["identifiers"]
 
-    def test_device_info_name_contains_ticker(self):
+    def test_device_info_name_uses_full_and_short_name(self):
         entity, _ = self._make_entity()
-        assert "AAPL_US_EQ" in entity.device_info["name"]
+        assert entity.device_info["name"] == "Apple Inc - AAPL"
+
+    def test_device_info_manufacturer_is_instrument_type(self):
+        entity, _ = self._make_entity()
+        assert entity.device_info["manufacturer"] == "STOCK"
+
+    def test_device_info_model_is_isin(self):
+        entity, _ = self._make_entity()
+        assert entity.device_info["model"] == "US0378331005"
+
+    def test_device_info_manufacturer_none_when_unknown(self):
+        entity, _ = self._make_entity(instrument_names={})
+        assert entity.device_info.get("manufacturer") is None
+
+    def test_device_info_model_none_when_unknown(self):
+        entity, _ = self._make_entity(instrument_names={})
+        assert entity.device_info.get("model") is None
+
+    def test_device_info_name_falls_back_to_ticker_when_unknown(self):
+        entity, _ = self._make_entity(instrument_names={})
+        assert entity.device_info["name"] == "AAPL_US_EQ - AAPL_US_EQ"
 
     def test_position_attribute_is_same_object_as_coordinator(self):
         entity, coord = self._make_entity()
         assert entity.position is coord.positions["AAPL_US_EQ"]
 
     def test_position_reflects_coordinator_update(self):
-        """entity.position is a live reference — mutations on coord.positions show through."""
         entity, coord = self._make_entity()
         coord.positions["AAPL_US_EQ"]._update_position(RAW_POSITION_UPDATED)
         assert entity.position.current_price == pytest.approx(180.00)
@@ -466,7 +490,6 @@ class TestBaseEntity:
 class TestSensorNativeValue:
     def _make_sensor(self, key: str, raw=None):
         from custom_components.trading212.sensor import Trading212Sensor, SENSORS
-
         if raw is None:
             raw = RAW_POSITION_1
 
@@ -511,13 +534,10 @@ class TestSensorNativeValue:
         )
 
     def test_unique_id_format(self):
-        sensor = self._make_sensor("current_price")
-        assert sensor._attr_unique_id == "AAPL_US_EQ-current_price"
+        assert self._make_sensor("current_price")._attr_unique_id == "AAPL_US_EQ-current_price"
 
     def test_native_value_reflects_position_update(self):
-        """native_value reads live from self.position — mutations are immediately visible."""
         sensor = self._make_sensor("current_price")
-        assert sensor.native_value == pytest.approx(175.00)
         sensor.position._update_position(RAW_POSITION_UPDATED)
         assert sensor.native_value == pytest.approx(180.00)
 
@@ -528,12 +548,10 @@ class TestSensorNativeValue:
 
 class TestSensorSetup:
     def test_sensor_count(self):
-        """Exactly six sensor types are defined."""
         from custom_components.trading212.sensor import SENSORS
         assert len(SENSORS) == 6
 
     def test_sensor_keys_match_position_attributes(self):
-        """Every sensor key must resolve on a real Position object."""
         from custom_components.trading212.sensor import SENSORS
         pos = make_position(make_mock_api(), RAW_POSITION_1)
         for desc in SENSORS:

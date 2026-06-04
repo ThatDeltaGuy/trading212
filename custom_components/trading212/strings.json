@@ -3,6 +3,7 @@
     "step": {
       "user": {
         "data": {
+          "account_name": "Account name",
           "api_key": "API key",
           "api_secret": "API secret"
         }
@@ -47,11 +48,11 @@
       "quantity": {
         "name": "Quantity"
       },
-      "currentvalue": {
-        "name": "Current value"
+      "walletvalue": {
+        "name": "Wallet value"
       },
-      "buyvalue": {
-        "name": "Buy value"
+      "invested": {
+        "name": "Invested"
       },
       "percentchange": {
         "name": "Percent change"

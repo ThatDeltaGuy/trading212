@@ -20,12 +20,13 @@ from homeassistant.const import CONF_API_KEY, CONF_SCAN_INTERVAL
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import CONF_API_SECRET, DOMAIN, POLLING_INTERVAL
+from .const import CONF_API_SECRET, CONF_ACCOUNT_NAME, DOMAIN, POLLING_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
+        vol.Required(CONF_ACCOUNT_NAME): str,
         vol.Required(CONF_API_KEY): str,
         vol.Required(CONF_API_SECRET): str,
     }
@@ -68,8 +69,9 @@ class Trading212ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(str(metadata["id"]))
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(
-                    title=str(metadata["id"]),
+                    title=f"{user_input[CONF_ACCOUNT_NAME]} - ID:{metadata['id']}",
                     data={
+                        CONF_ACCOUNT_NAME: user_input[CONF_ACCOUNT_NAME],
                         CONF_API_KEY: user_input[CONF_API_KEY],
                         CONF_API_SECRET: user_input[CONF_API_SECRET],
                     },

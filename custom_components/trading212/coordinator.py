@@ -46,6 +46,7 @@ class Trading212Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         hass: HomeAssistant,
         api: Trading212API,
         positions: list[Position],
+        instrument_names: dict[str, tuple[str, str, str, str, str]],
         interval: int,
         entry: ConfigEntry,
     ) -> None:
@@ -59,6 +60,8 @@ class Trading212Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.api = api
         # Keyed by ticker for O(1) lookup in entities.
         self.positions: dict[str, Position] = {p.ticker: p for p in positions}
+        # Maps ticker → (full_name, short_name) e.g. ("Nvidia Corp", "NVDA").
+        self.instrument_names = instrument_names
         self.config_entry: ConfigEntry = entry
         self._base_interval = max(timedelta(seconds=interval), _MIN_INTERVAL)
 
