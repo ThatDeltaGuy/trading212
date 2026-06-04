@@ -3,6 +3,7 @@
     "step": {
       "user": {
         "data": {
+          "account_name": "Account name",
           "api_key": "API key",
           "api_secret": "API secret"
         }
@@ -47,14 +48,44 @@
       "quantity": {
         "name": "Quantity"
       },
-      "currentvalue": {
-        "name": "Current value"
+      "walletvalue": {
+        "name": "Wallet value"
       },
-      "buyvalue": {
-        "name": "Buy value"
+      "invested": {
+        "name": "Invested"
       },
       "percentchange": {
         "name": "Percent change"
+      },
+      "quantityavailablefortrading": {
+        "name": "Quantity available for trading"
+      },
+      "initialfilldate": {
+        "name": "Position opened"
+      },
+      "availablefortrade": {
+        "name": "Available to trade"
+      },
+      "cashinpies": {
+        "name": "Cash in pies"
+      },
+      "reservedfororders": {
+        "name": "Reserved for orders"
+      },
+      "investmentscurrentvalue": {
+        "name": "Investments current value"
+      },
+      "realizedprofitloss": {
+        "name": "Realized profit / loss"
+      },
+      "totalcost": {
+        "name": "Total cost"
+      },
+      "unrealizedprofitloss": {
+        "name": "Unrealized profit / loss"
+      },
+      "totalvalue": {
+        "name": "Total value"
       }
     }
   }

@@ -40,11 +40,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except Trading212TimeOut as err:
         raise ConfigEntryNotReady(f"Error connecting to {entry.data[CONF_ID]}") from err
 
+    # Fetch instrument metadata for human-readable device names.
+    # Best-effort — a failure here doesn't abort setup; devices fall back to ticker.
+    # Note: the pytrading212api library has a bug where get_instruments() calls
+    # "metadata/instruments" instead of "equity/metadata/instruments". We call
+    # _get() directly with the correct path until the library is fixed.
+    instrument_names: dict[str, tuple[str, str]] = {}
+    try:
+        raw_instruments = await trading212_api._get("equity/metadata/instruments")  # noqa: SLF001
+        instrument_names = {
+            i["ticker"]: (
+                i.get("name", i["ticker"]),
+                i.get("shortName", i["ticker"]),
+                i.get("isin", ""),
+                i.get("type", ""),
+                i.get("currencyCode", ""),
+            )
+            for i in raw_instruments
+        }
+    except Exception:  # noqa: BLE001
+        _LOGGER.warning(
+            "Could not fetch instrument names; devices will display ticker IDs"
+        )
+
     positions = [Position(trading212_api, p) for p in raw_positions]
     scan_interval = entry.options.get(CONF_SCAN_INTERVAL)
 
     coordinator = Trading212Coordinator(
-        hass, trading212_api, positions, scan_interval, entry
+        hass, trading212_api, positions, instrument_names, scan_interval, entry
     )
 
     # Single first_refresh — one bulk API call, not N concurrent ones.
