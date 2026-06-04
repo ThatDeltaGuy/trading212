@@ -712,7 +712,7 @@ class TestAccountWalletSensor:
 
     def test_sensor_count(self):
         from custom_components.trading212.account_sensor import ACCOUNT_WALLET_SENSORS
-        assert len(ACCOUNT_WALLET_SENSORS) == 8
+        assert len(ACCOUNT_WALLET_SENSORS) == 7
 
     def test_all_keys_unique(self):
         from custom_components.trading212.account_sensor import ACCOUNT_WALLET_SENSORS
@@ -740,11 +740,8 @@ class TestAccountWalletSensor:
     def test_unrealized_profit_loss(self):
         assert self._make_sensor("unrealized_profit_loss").native_value == pytest.approx(500.00)
 
-    def test_total_value(self):
-        assert self._make_sensor("total_value").native_value == pytest.approx(10500.00)
-
     def test_native_unit_is_account_currency(self):
-        assert self._make_sensor("total_value").native_unit_of_measurement == "GBP"
+        assert self._make_sensor("available_to_trade").native_unit_of_measurement == "GBP"
 
     def test_currency_attribute(self):
         assert self._make_sensor("available_to_trade").extra_state_attributes["currency"] == "GBP"
@@ -758,13 +755,13 @@ class TestAccountWalletSensor:
         assert sensor.native_value is None
 
     def test_unique_id_format(self):
-        sensor = self._make_sensor("total_value")
-        assert sensor._attr_unique_id == "12345678_wallet_total_value"
+        sensor = self._make_sensor("available_to_trade")
+        assert sensor._attr_unique_id == "12345678_wallet_available_to_trade"
 
     def test_device_info_identifier(self):
-        sensor = self._make_sensor("total_value")
+        sensor = self._make_sensor("available_to_trade")
         assert ("trading212", "12345678_wallet") in sensor._attr_device_info["identifiers"]
 
     def test_device_name_is_account_wallet(self):
-        sensor = self._make_sensor("total_value")
+        sensor = self._make_sensor("available_to_trade")
         assert sensor._attr_device_info["name"] == "Account Wallet"

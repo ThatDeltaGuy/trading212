@@ -36,7 +36,7 @@ class AccountWalletSensorDescription(SensorEntityDescription):
 ACCOUNT_WALLET_SENSORS: tuple[AccountWalletSensorDescription, ...] = (
     AccountWalletSensorDescription(
         key="available_to_trade",
-        translation_key="availablefortrade",
+        translation_key="mainpot",
         path=("cash", "availableToTrade"),
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
@@ -57,7 +57,7 @@ ACCOUNT_WALLET_SENSORS: tuple[AccountWalletSensorDescription, ...] = (
     ),
     AccountWalletSensorDescription(
         key="investments_current_value",
-        translation_key="investmentscurrentvalue",
+        translation_key="totalinvestmentvalue",
         path=("investments", "currentValue"),
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
@@ -71,7 +71,7 @@ ACCOUNT_WALLET_SENSORS: tuple[AccountWalletSensorDescription, ...] = (
     ),
     AccountWalletSensorDescription(
         key="total_cost",
-        translation_key="totalcost",
+        translation_key="totalinvested",
         path=("investments", "totalCost"),
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
@@ -80,13 +80,6 @@ ACCOUNT_WALLET_SENSORS: tuple[AccountWalletSensorDescription, ...] = (
         key="unrealized_profit_loss",
         translation_key="unrealizedprofitloss",
         path=("investments", "unrealizedProfitLoss"),
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=2,
-    ),
-    AccountWalletSensorDescription(
-        key="total_value",
-        translation_key="totalvalue",
-        path=("totalValue",),
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
     ),

@@ -45,22 +45,15 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install test dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements-dev.txt
-
       - name: Validate manifest version and tag availability
         env:
           VERSION: ${{ inputs.version }}
         run: |
-          manifest_version=$(python - <<'PY'
-          import json
-          from pathlib import Path
-          manifest = json.loads(Path("custom_components/trading212/manifest.json").read_text())
-          print(manifest["version"])
-          PY
-          )
+          manifest_version=$(python -c "
+import json, pathlib
+m = json.loads(pathlib.Path('custom_components/trading212/manifest.json').read_text())
+print(m['version'])
+")
 
           if [ "$manifest_version" != "$VERSION" ]; then
             echo "Manifest version $manifest_version does not match requested version $VERSION" >&2
@@ -72,6 +65,11 @@ jobs:
             echo "Tag $tag_name already exists" >&2
             exit 1
           fi
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
 
       - name: Run test suite
         run: python -m pytest tests/ -v --tb=short
