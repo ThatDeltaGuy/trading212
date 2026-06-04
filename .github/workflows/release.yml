@@ -81,21 +81,9 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: |
           asset_name="trading212.zip"
-          staging_dir="/tmp/trading212-release"
-          rm -rf "$staging_dir"
-          mkdir -p "$staging_dir"
-
-          cp -R custom_components "$staging_dir/"
-          cp README.md LICENSE hacs.json "$staging_dir/"
-          if [ -d brand ]; then
-            cp -R brand "$staging_dir/"
-          fi
-
           mkdir -p dist
           rm -f "dist/$asset_name"
-          (
-            cd "$staging_dir" && zip -rq "/tmp/$asset_name" .
-          )
+          (cd custom_components/trading212 && zip -rq "/tmp/$asset_name" .)
           mv "/tmp/$asset_name" "dist/$asset_name"
 
       - name: Create and push tag
